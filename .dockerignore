@@ -1,0 +1,30 @@
+# Build output
+**/bin/
+**/obj/
+**/out/
+
+# The Tailwind CLI is ~107 MB, Windows-only, and not used in the container
+# build. wwwroot/css/app.css is committed instead.
+tools/tailwindcss.exe
+
+# Local recordings: personal audio, never needed in an image
+recordings/
+
+# Tests do not ship
+tests/
+
+# VCS and editor noise
+.git/
+.gitignore
+.vs/
+.vscode/
+.idea/
+
+# Docs
+*.md
+!README.md
+
+# Local secrets must never reach an image layer
+**/appsettings.Development.json
+**/*.user
+.env

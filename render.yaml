@@ -1,0 +1,22 @@
+services:
+  - type: web
+    name: bolopay
+    runtime: docker
+    plan: free
+    # Free instances live in a single region; Singapore is closest to Bangladesh.
+    region: singapore
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    autoDeployTrigger: commit
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      # Set in the Render dashboard, never here. sync:false stops Render from
+      # expecting a value in this file and keeps the key out of the repo.
+      - key: Groq__ApiKey
+        sync: false
+      # Tight in production. Free-tier Groq quota is the thing being protected,
+      # not spend.
+      - key: RateLimit__VoicePermitsPerHour
+        value: "20"

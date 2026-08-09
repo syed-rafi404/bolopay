@@ -1,0 +1,52 @@
+@import "tailwindcss";
+
+/* Tailwind v4 auto-detects sources relative to this file; Razor views live
+   outside that scope, so declare them explicitly. */
+@source "../Pages/**/*.cshtml";
+@source "../wwwroot/js/**/*.js";
+
+@theme {
+  --font-bangla: "Hind Siliguri", "Noto Sans Bengali", system-ui, sans-serif;
+
+  /* Banglalink-adjacent orange, kept deliberately distinct from the amber used
+     for uncertainty flags so the two never read as the same signal. */
+  --color-brand-50: #fff7ed;
+  --color-brand-100: #ffedd5;
+  --color-brand-500: #f97316;
+  --color-brand-600: #ea580c;
+  --color-brand-700: #c2410c;
+}
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+  }
+
+  body {
+    font-family: var(--font-bangla);
+  }
+
+  /* Bangla numerals and script need a touch more line height to avoid
+     clipping ascenders in tight cards. */
+  .bn {
+    line-height: 1.7;
+  }
+}
+
+@layer components {
+  .mic-pulse {
+    animation: mic-pulse 1.6s ease-out infinite;
+  }
+
+  @keyframes mic-pulse {
+    0%   { box-shadow: 0 0 0 0 rgb(249 115 22 / 0.45); }
+    70%  { box-shadow: 0 0 0 22px rgb(249 115 22 / 0); }
+    100% { box-shadow: 0 0 0 0 rgb(249 115 22 / 0); }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .mic-pulse {
+      animation: none;
+    }
+  }
+}

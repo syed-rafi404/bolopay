@@ -1,0 +1,393 @@
+﻿@page
+@model IndexModel
+@using System.Text.Json
+@{
+    ViewData["Title"] = "Voice transaction safety";
+
+    var config = new
+    {
+        startingBalance = Model.StartingBalance,
+        account = new { name = Model.Account.Name, banglaName = Model.Account.BanglaName, phone = Model.Account.Phone },
+        contacts = Model.Contacts.Select(c => new { name = c.Name, banglaName = c.BanglaName, phone = c.Phone }),
+        samples = Model.Samples.Select(s => new
+        {
+            file = s.File,
+            url = Url.Content($"~/sample-audio/{s.File}"),
+            label = s.Label,
+            banglaLabel = s.BanglaLabel,
+            hint = s.Hint
+        })
+    };
+}
+
+<div class="min-h-full" x-data="boloApp(@Html.Raw(JsonSerializer.Serialize(config)))" x-init="init()" x-cloak>
+    <div class="mx-auto flex min-h-full w-full max-w-md flex-col px-4 pb-10 pt-5 sm:max-w-lg">
+
+        @* ---------------------------------------------------------------
+           Disclaimer. Section 16 requires this visible without scrolling.
+           ---------------------------------------------------------------- *@
+        <div class="mb-4 rounded-lg border border-slate-300 bg-white/70 px-3 py-2 text-[11px] leading-snug text-slate-600">
+            <span class="font-semibold text-slate-700">Prototype, not a bank.</span>
+            An independent portfolio piece exploring voice-based transaction safety, inspired by
+            Bangladesh's mobile-payments sector. Not affiliated with, endorsed by, or connected to
+            Banglalink, Mukto Pay, or any bank. No real money, accounts, or personal data — everything is simulated.
+        </div>
+
+        @* --- Account card ------------------------------------------------ *@
+        <div class="rounded-2xl bg-gradient-to-br from-brand-600 to-brand-700 p-5 text-white shadow-lg shadow-brand-600/20">
+            <div class="flex items-start justify-between">
+                <div>
+                    <p class="text-xs font-medium uppercase tracking-wider text-white/70">BoloPay</p>
+                    <p class="bn mt-1 text-lg font-semibold">@Model.Account.BanglaName</p>
+                    <p class="text-xs text-white/70">@Model.Account.Phone</p>
+                </div>
+                <div class="text-right">
+                    <p class="text-xs font-medium uppercase tracking-wider text-white/70">Balance</p>
+                    <p class="mt-1 text-2xl font-bold tabular-nums">
+                        ৳<span x-text="formattedBalance"></span>
+                    </p>
+                </div>
+            </div>
+
+            <div class="mt-4 flex gap-2 border-t border-white/20 pt-3">
+                <template x-for="c in contacts" :key="c.name">
+                    <div class="flex flex-1 flex-col items-center gap-1">
+                        <div class="flex h-9 w-9 items-center justify-center rounded-full bg-white/20 text-sm font-semibold"
+                             x-text="c.name.charAt(0)"></div>
+                        <span class="bn text-[11px] text-white/85" x-text="c.banglaName"></span>
+                    </div>
+                </template>
+            </div>
+        </div>
+
+        @* --- Main panel --------------------------------------------------- *@
+        <div class="mt-4 flex-1 rounded-2xl bg-white p-5 shadow-sm ring-1 ring-slate-200">
+
+            @* ============ IDLE / RECORDING ============ *@
+            <template x-if="state === 'idle' || state === 'recording'">
+                <div>
+                    <div class="flex flex-col items-center py-4">
+                        <button type="button"
+                                @@click="toggleRecording()"
+                                :disabled="!micSupported"
+                                :class="state === 'recording'
+                                    ? 'bg-red-600 mic-pulse'
+                                    : micSupported ? 'bg-brand-600 hover:bg-brand-700' : 'bg-slate-300 cursor-not-allowed'"
+                                class="flex h-20 w-20 items-center justify-center rounded-full text-white shadow-lg transition focus:outline-none focus-visible:ring-4 focus-visible:ring-brand-500/40"
+                                :aria-label="state === 'recording' ? 'Stop recording' : 'Start recording'">
+                            <template x-if="state !== 'recording'">
+                                <svg class="h-8 w-8" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24" aria-hidden="true">
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Z" />
+                                    <path stroke-linecap="round" stroke-linejoin="round" d="M19 12a7 7 0 0 1-14 0M12 19v3" />
+                                </svg>
+                            </template>
+                            <template x-if="state === 'recording'">
+                                <span class="h-6 w-6 rounded bg-white"></span>
+                            </template>
+                        </button>
+
+                        <p class="mt-3 text-sm font-medium text-slate-700"
+                           x-text="state === 'recording'
+                                ? 'Listening… tap to stop (' + recordingSeconds + 's)'
+                                : 'Tap and say a command'"></p>
+
+                        <p class="bn mt-1 text-center text-xs text-slate-500" x-show="state !== 'recording'">
+                            যেমন: “আদিবার নাম্বারে পাঁচশো টাকা পাঠাও”
+                        </p>
+                    </div>
+
+                    <div x-show="micError" x-cloak
+                         class="mb-3 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-xs text-amber-900"
+                         x-text="micError"></div>
+
+                    <div x-show="errorMessage" x-cloak
+                         class="mb-3 rounded-lg border border-red-300 bg-red-50 px-3 py-2 text-xs text-red-800"
+                         x-text="errorMessage"></div>
+
+                    @* Sample clips: required, not optional. Not every visitor
+                       will grant mic access or attempt Bangla pronunciation. *@
+                    <div class="border-t border-slate-200 pt-4">
+                        <p class="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500">
+                            Or try a sample command
+                        </p>
+                        <div class="flex flex-col gap-2">
+                            <template x-for="s in samples" :key="s.file">
+                                <button type="button"
+                                        @@click="playSample(s)"
+                                        :disabled="isBusy"
+                                        class="group flex w-full items-center gap-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-left transition hover:border-brand-300 hover:bg-brand-50 disabled:opacity-50">
+                                    <span class="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-white text-brand-600 ring-1 ring-slate-200 group-hover:ring-brand-300">
+                                        <svg class="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                                            <path d="M6.3 3.8a1 1 0 0 1 1.02.06l8 5a1 1 0 0 1 0 1.7l-8 5A1 1 0 0 1 5.8 14.7V5.3a1 1 0 0 1 .5-.87Z" />
+                                        </svg>
+                                    </span>
+                                    <span class="min-w-0 flex-1">
+                                        <span class="block text-sm font-medium text-slate-800" x-text="s.label"></span>
+                                        <span class="bn block truncate text-xs text-slate-500" x-text="s.banglaLabel"></span>
+                                    </span>
+                                    <span x-show="s.hint"
+                                          class="shrink-0 rounded-full bg-slate-200 px-2 py-0.5 text-[10px] font-medium text-slate-600"
+                                          x-text="s.hint"></span>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+            </template>
+
+            @* ============ PROCESSING ============ *@
+            <template x-if="state === 'processing'">
+                <div class="flex flex-col items-center justify-center py-16">
+                    <svg class="h-8 w-8 animate-spin text-brand-600" fill="none" viewBox="0 0 24 24" aria-hidden="true">
+                        <circle class="opacity-20" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-90" fill="currentColor" d="M4 12a8 8 0 0 1 8-8v4a4 4 0 0 0-4 4H4Z"></path>
+                    </svg>
+                    <p class="mt-3 text-sm font-medium text-slate-600">Listening back…</p>
+                    <p class="mt-1 text-xs text-slate-400">Transcribing and checking confidence</p>
+                </div>
+            </template>
+
+            @* ============ CONFIRM ============ *@
+            <template x-if="state === 'confirm'">
+                <div>
+                    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Confirm transfer</p>
+
+                    @* The flagged branch. When the pipeline distrusted what it
+                       heard, the uncertain field becomes an editable input
+                       pre-filled with the best guess rather than plain text. *@
+                    <div x-show="result.needsConfirmation" x-cloak
+                         class="mt-3 flex gap-2 rounded-lg border border-amber-300 bg-amber-50 px-3 py-2">
+                        <svg class="mt-0.5 h-4 w-4 shrink-0 text-amber-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+                        </svg>
+                        <p class="text-xs leading-relaxed text-amber-900" x-text="result.confidenceReason"></p>
+                    </div>
+
+                    <div class="mt-4 space-y-4">
+                        @* Amount *@
+                        <div>
+                            <label for="amount" class="block text-xs font-medium text-slate-500">Amount</label>
+
+                            <template x-if="result.amountUncertain">
+                                <div class="mt-1">
+                                    <div class="flex items-center gap-2 rounded-lg border-2 border-amber-400 bg-amber-50/50 px-3 py-2 focus-within:border-amber-500">
+                                        <span class="text-lg font-semibold text-slate-500">৳</span>
+                                        <input id="amount" type="number" inputmode="numeric" min="1"
+                                               x-model="editedAmount"
+                                               class="w-full bg-transparent text-2xl font-bold tabular-nums text-slate-900 outline-none" />
+                                    </div>
+                                    <p class="mt-1 text-[11px] text-amber-800">
+                                        Heard as “<span class="bn" x-text="result.rawNumberPhrase || result.transcript"></span>” — please check.
+                                    </p>
+                                </div>
+                            </template>
+
+                            <template x-if="!result.amountUncertain">
+                                <p class="mt-1 text-2xl font-bold tabular-nums text-slate-900">
+                                    ৳<span x-text="formatAmount(editedAmount)"></span>
+                                </p>
+                            </template>
+                        </div>
+
+                        @* Recipient *@
+                        <div>
+                            <label for="recipient" class="block text-xs font-medium text-slate-500">To</label>
+
+                            <template x-if="result.recipientUncertain">
+                                <div class="mt-1">
+                                    <select id="recipient" x-model="editedRecipient"
+                                            class="w-full rounded-lg border-2 border-amber-400 bg-amber-50/50 px-3 py-2 text-base font-semibold text-slate-900 outline-none focus:border-amber-500">
+                                        <template x-for="c in contacts" :key="c.name">
+                                            <option :value="c.name" x-text="c.name + ' — ' + c.phone"></option>
+                                        </template>
+                                    </select>
+                                    <p class="mt-1 text-[11px] text-amber-800">
+                                        Heard “<span class="bn" x-text="result.recipientHeard"></span>” — please confirm.
+                                    </p>
+                                </div>
+                            </template>
+
+                            <template x-if="!result.recipientUncertain">
+                                <div class="mt-1">
+                                    <p class="text-base font-semibold text-slate-900">
+                                        <span x-text="result.recipientName"></span>
+                                        <span class="bn text-slate-500" x-text="'(' + result.recipientBanglaName + ')'"></span>
+                                    </p>
+                                    <p class="text-xs text-slate-500" x-text="result.recipientPhone"></p>
+                                </div>
+                            </template>
+                        </div>
+
+                        @* What was heard — always shown, so nothing feels hidden. *@
+                        <div class="rounded-lg bg-slate-50 px-3 py-2">
+                            <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Heard</p>
+                            <p class="bn mt-0.5 text-sm text-slate-700" x-text="result.transcript"></p>
+                        </div>
+
+                        <p x-show="amountError" x-cloak class="text-xs font-medium text-red-600" x-text="amountError"></p>
+                    </div>
+
+                    <div class="mt-5 flex gap-2">
+                        <button type="button" @@click="reset()"
+                                class="flex-1 rounded-lg border border-slate-300 px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+                            Cancel
+                        </button>
+                        <button type="button" @@click="confirm()" :disabled="!amountValid"
+                                :class="result.needsConfirmation ? 'bg-amber-500 hover:bg-amber-600' : 'bg-brand-600 hover:bg-brand-700'"
+                                class="flex-[2] rounded-lg px-4 py-2.5 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-40"
+                                x-text="result.needsConfirmation ? 'Yes, this is correct — send' : 'Confirm & send'">
+                        </button>
+                    </div>
+                </div>
+            </template>
+
+            @* ============ RECEIPT ============ *@
+            <template x-if="state === 'receipt'">
+                <div class="py-2">
+                    <div class="flex flex-col items-center">
+                        <div class="flex h-14 w-14 items-center justify-center rounded-full bg-green-100">
+                            <svg class="h-7 w-7 text-green-600" fill="none" stroke="currentColor" stroke-width="2.5" viewBox="0 0 24 24" aria-hidden="true">
+                                <path stroke-linecap="round" stroke-linejoin="round" d="m5 13 4 4L19 7" />
+                            </svg>
+                        </div>
+                        <p class="mt-3 text-lg font-bold text-slate-900">
+                            ৳<span x-text="formatAmount(receipt.amount)"></span> sent
+                        </p>
+                        <p class="text-sm text-slate-500">to <span x-text="receipt.recipient"></span></p>
+                    </div>
+
+                    <dl class="mt-5 space-y-2 rounded-lg bg-slate-50 p-3 text-xs">
+                        <div class="flex justify-between">
+                            <dt class="text-slate-500">Transaction ID</dt>
+                            <dd class="font-mono font-medium text-slate-800" x-text="receipt.id"></dd>
+                        </div>
+                        <div class="flex justify-between">
+                            <dt class="text-slate-500">To</dt>
+                            <dd class="font-medium text-slate-800" x-text="receipt.phone"></dd>
+                        </div>
+                        <div class="flex justify-between">
+                            <dt class="text-slate-500">Time</dt>
+                            <dd class="font-medium text-slate-800" x-text="formatTimestamp(receipt.timestamp)"></dd>
+                        </div>
+                        <div class="flex justify-between border-t border-slate-200 pt-2">
+                            <dt class="text-slate-500">New balance</dt>
+                            <dd class="font-semibold text-slate-900">৳<span x-text="formattedBalance"></span></dd>
+                        </div>
+                    </dl>
+
+                    <p class="mt-3 text-center text-[10px] text-slate-400">Simulated transaction — no money moved.</p>
+
+                    <button type="button" @@click="reset()"
+                            class="mt-4 w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700">
+                        Try another command
+                    </button>
+                </div>
+            </template>
+
+            @* ============ BALANCE ============ *@
+            <template x-if="state === 'balance'">
+                <div class="py-6 text-center">
+                    <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">Your balance</p>
+                    <p class="mt-2 text-4xl font-bold tabular-nums text-slate-900">৳<span x-text="formattedBalance"></span></p>
+                    <div class="mt-4 rounded-lg bg-slate-50 px-3 py-2">
+                        <p class="bn text-sm text-slate-600" x-text="result.transcript"></p>
+                    </div>
+                    <button type="button" @@click="reset()"
+                            class="mt-5 w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700">
+                        Try another command
+                    </button>
+                </div>
+            </template>
+
+            @* ============ UNKNOWN RECIPIENT ============ *@
+            <template x-if="state === 'unknownRecipient'">
+                <div class="py-6 text-center">
+                    <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-amber-100">
+                        <svg class="h-6 w-6 text-amber-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M15 19.1A7 7 0 0 0 5 19.1M12 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm7 1v4m0 3h.01" />
+                        </svg>
+                    </div>
+                    <p class="mt-3 text-sm font-semibold text-slate-800">
+                        “<span class="bn" x-text="result.recipientHeard"></span>” isn't in your contacts
+                    </p>
+                    <p class="mt-1 text-xs text-slate-500">
+                        Nothing was sent. Try Adiba, Tanvir, or Amma.
+                    </p>
+                    <div class="mt-3 rounded-lg bg-slate-50 px-3 py-2">
+                        <p class="bn text-sm text-slate-600" x-text="result.transcript"></p>
+                    </div>
+                    <button type="button" @@click="reset()"
+                            class="mt-5 w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700">
+                        Try again
+                    </button>
+                </div>
+            </template>
+
+            @* ============ OVER BALANCE ============ *@
+            <template x-if="state === 'overBalance'">
+                <div class="py-6 text-center">
+                    <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
+                        <svg class="h-6 w-6 text-red-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M12 9v4m0 4h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0Z" />
+                        </svg>
+                    </div>
+                    <p class="mt-3 text-sm font-semibold text-slate-800">
+                        ৳<span x-text="formatAmount(result.amountBdt)"></span> is more than your balance
+                    </p>
+                    <p class="mt-1 text-xs text-slate-500">
+                        Your balance is ৳<span x-text="formattedBalance"></span>. Nothing was sent.
+                    </p>
+                    <div class="mt-3 rounded-lg bg-slate-50 px-3 py-2">
+                        <p class="bn text-sm text-slate-600" x-text="result.transcript"></p>
+                    </div>
+                    <button type="button" @@click="reset()"
+                            class="mt-5 w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700">
+                        Try again
+                    </button>
+                </div>
+            </template>
+
+            @* ============ UNRECOGNIZED / NO SPEECH ============ *@
+            <template x-if="state === 'unrecognized' || state === 'noSpeech'">
+                <div class="py-6 text-center">
+                    <div class="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-slate-100">
+                        <svg class="h-6 w-6 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" aria-hidden="true">
+                            <path stroke-linecap="round" stroke-linejoin="round" d="M9.9 9a2.1 2.1 0 0 1 4.1.7c0 1.4-2.1 2.1-2.1 2.1M12 17h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" />
+                        </svg>
+                    </div>
+                    <p class="mt-3 text-sm font-semibold text-slate-800">Didn't catch a valid command</p>
+                    <p class="mt-1 text-xs text-slate-500">
+                        Try “send [amount] to [name]” or “what's my balance”.
+                    </p>
+                    <div x-show="result && result.transcript" x-cloak class="mt-3 rounded-lg bg-slate-50 px-3 py-2">
+                        <p class="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Heard</p>
+                        <p class="bn mt-0.5 text-sm text-slate-600" x-text="result.transcript"></p>
+                    </div>
+                    <button type="button" @@click="reset()"
+                            class="mt-5 w-full rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-brand-700">
+                        Try again
+                    </button>
+                </div>
+            </template>
+
+            @* Calibration read-out. Development only. *@
+            <template x-if="result && result.diagnostics">
+                <details class="mt-4 border-t border-slate-200 pt-3">
+                    <summary class="cursor-pointer text-[11px] font-semibold uppercase tracking-wide text-slate-400">
+                        Confidence diagnostics
+                    </summary>
+                    <pre class="mt-2 overflow-x-auto rounded bg-slate-900 p-2 text-[10px] leading-relaxed text-slate-100"
+                         x-text="JSON.stringify(result.diagnostics, null, 2)"></pre>
+                </details>
+            </template>
+        </div>
+
+        <p class="mt-4 text-center text-[11px] text-slate-400">
+            Voice → transcript → confidence check → confirm. Balance resets on refresh.
+        </p>
+    </div>
+</div>
+
+<style>
+    [x-cloak] { display: none !important; }
+</style>

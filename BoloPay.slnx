@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/BoloPay.Web/BoloPay.Web.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/BoloPay.Tests/BoloPay.Tests.csproj" />
+  </Folder>
+</Solution>
