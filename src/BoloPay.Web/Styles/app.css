@@ -8,13 +8,15 @@
 @theme {
   --font-bangla: "Hind Siliguri", "Noto Sans Bengali", system-ui, sans-serif;
 
-  /* Banglalink-adjacent orange, kept deliberately distinct from the amber used
-     for uncertainty flags so the two never read as the same signal. */
-  --color-brand-50: #fff7ed;
-  --color-brand-100: #ffedd5;
-  --color-brand-500: #f97316;
-  --color-brand-600: #ea580c;
-  --color-brand-700: #c2410c;
+  /* Banglalink's brand orange, taken from their own stylesheet
+     (cfl.banglalink.net/library/main.css): #f16522 on primary buttons with
+     #fdede4 as the light tint. Deliberately kept distinct from the amber used
+     for uncertainty flags so brand colour and warning never read alike. */
+  --color-brand-50: #fdede4;
+  --color-brand-100: #fbd9c6;
+  --color-brand-500: #f16522;
+  --color-brand-600: #d9541a;
+  --color-brand-700: #b34314;
 }
 
 @layer base {
@@ -39,9 +41,9 @@
   }
 
   @keyframes mic-pulse {
-    0%   { box-shadow: 0 0 0 0 rgb(249 115 22 / 0.45); }
-    70%  { box-shadow: 0 0 0 22px rgb(249 115 22 / 0); }
-    100% { box-shadow: 0 0 0 0 rgb(249 115 22 / 0); }
+    0%   { box-shadow: 0 0 0 0 rgb(241 101 34 / 0.45); }
+    70%  { box-shadow: 0 0 0 22px rgb(241 101 34 / 0); }
+    100% { box-shadow: 0 0 0 0 rgb(241 101 34 / 0); }
   }
 
   @media (prefers-reduced-motion: reduce) {
