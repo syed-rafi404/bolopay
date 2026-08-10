@@ -102,18 +102,35 @@ public sealed class GroqTranscriptionService(
         return copy.ToArray();
     }
 
-    private static string BuildPrompt()
+    private string BuildPrompt()
     {
         // Whisper's prompt (max 224 tokens) biases vocabulary and spelling.
         // The larger amounts are listed explicitly because calibration showed
         // "পঞ্চাশ হাজার" being heard as "পন্ছশে", which dropped the amount
         // entirely and sent a valid command to the unrecognized branch.
-        var names = string.Join(", ", MockData.Contacts.Select(c => $"{c.BanglaName} ({c.Name})"));
-        return $"বিকাশ/মোবাইল ব্যাংকিং কমান্ড। পরিচিত নাম: {names}. "
-             + "টাকার পরিমাণ: একশো, দুইশো, তিনশো, চারশো, পাঁচশো, ছয়শো, সাতশো, আটশো, নয়শো, "
-             + "এক হাজার, দুই হাজার, পাঁচ হাজার, দশ হাজার, বিশ হাজার, পঞ্চাশ হাজার। "
-             + "উদাহরণ: আদিবার নাম্বারে পাঁচশো টাকা পাঠাও। "
-             + "আম্মাকে পঞ্চাশ হাজার টাকা পাঠাও। আমার ব্যালেন্স কত?";
+        //
+        // Contact names are seeded by default. Dropping them was tried and
+        // measured worse on every axis: known-contact accuracy fell from 12/12
+        // to 6/15, and amounts degraded too — "পঞ্চাশ হাজার" (50,000) was read
+        // as "পঞ্চাশ" (50). It also failed to fix the unfamiliar-name case that
+        // motivated the change, because the placeholder names in the examples
+        // just became the new bias.
+        //
+        // The trade-off is inherent to prompting: biasing toward a vocabulary
+        // helps inside it and hurts outside it. Since recipients here always
+        // come from the contact list, biasing toward that list is correct, and
+        // an unknown name should fail closed rather than be guessed at.
+        var header = _options.IncludeContactNamesInPrompt
+            ? "বিকাশ/মোবাইল ব্যাংকিং কমান্ড। পরিচিত নাম: "
+              + string.Join(", ", MockData.Contacts.Select(c => $"{c.BanglaName} ({c.Name})"))
+              + "। "
+            : "বিকাশ/মোবাইল ব্যাংকিং কমান্ড। ";
+
+        return header
+            + "টাকার পরিমাণ: একশো, দুইশো, তিনশো, চারশো, পাঁচশো, ছয়শো, সাতশো, আটশো, নয়শো, "
+            + "এক হাজার, দুই হাজার, পাঁচ হাজার, দশ হাজার, বিশ হাজার, পঞ্চাশ হাজার। "
+            + "উদাহরণ: আদিবার নাম্বারে পাঁচশো টাকা পাঠাও। "
+            + "আম্মাকে পঞ্চাশ হাজার টাকা পাঠাও। আমার ব্যালেন্স কত?";
     }
 }
 

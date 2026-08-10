@@ -43,8 +43,13 @@ public class IndexModel(IWebHostEnvironment env) : PageModel
             "আদিবার নাম্বারে পাঁচশো টাকা পাঠাও", "degraded speech"),
         new("08-poor-connection.wav", "Poor connection",
             "আদিবার নাম্বারে পাঁচশো টাকা পাঠাও", "noisy line"),
-        new("06-unknown-recipient.wav", "Unknown recipient",
-            "রাকিবকে তিনশো টাকা পাঠাও", "not in contacts"),
+        // Measured, not assumed: this clip does not reach the unknown-recipient
+        // screen. "রাকিব" is outside the prompt's seeded vocabulary, so Whisper
+        // warps both the name and the amount and the command lands on the
+        // unrecognised branch. Labelled for what it actually demonstrates —
+        // failing closed on speech the pipeline cannot parse.
+        new("06-unknown-recipient.wav", "Name outside contacts",
+            "রাকিবকে তিনশো টাকা পাঠাও", "not understood"),
         new("07-over-balance.wav", "More than the balance",
             "আম্মাকে পঞ্চাশ হাজার টাকা পাঠাও", "blocked"),
         new("04-balance.wav", "Check balance",

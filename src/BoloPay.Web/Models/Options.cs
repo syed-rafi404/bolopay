@@ -57,6 +57,29 @@ public sealed class GroqOptions
     public string Language { get; set; } = "bn";
 
     /// <summary>
+    /// Whether to seed the Whisper prompt with the mock contact names.
+    ///
+    /// Measured both ways on the sample clips (3 runs each). Seeding the names
+    /// is clearly better and is therefore the default:
+    ///
+    ///   with names    12/12 known-contact runs correct
+    ///   without names  6/15 correct, and amounts corrupted — "পঞ্চাশ হাজার"
+    ///                  (50,000) was read as "পঞ্চাশ" (50), a 1000x error on a
+    ///                  payment screen
+    ///
+    /// Removing the names also did not fix the unfamiliar-name case it was
+    /// meant to fix: the placeholder names used in the prompt examples simply
+    /// became the new bias, and "রাকিব" was transcribed as "রহিম".
+    ///
+    /// The underlying trade-off is inherent to Whisper prompting: biasing
+    /// toward a known vocabulary improves that vocabulary and degrades
+    /// everything outside it. For a transfer flow whose recipients are always
+    /// drawn from a contact list, biasing toward the contact list is the right
+    /// call — an unrecognised name should fail closed, not be guessed at.
+    /// </summary>
+    public bool IncludeContactNamesInPrompt { get; set; } = true;
+
+    /// <summary>
     /// Whether to run the second transcription pass. Costs one extra ASR call
     /// per request (and one extra LLM call only when the transcripts differ).
     /// </summary>
