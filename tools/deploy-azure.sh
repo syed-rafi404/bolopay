@@ -13,7 +13,12 @@ set -euo pipefail
 # ---------------------------------------------------------------------------
 # Settings
 # ---------------------------------------------------------------------------
-GROQ_KEY="PASTE_YOUR_GROQ_KEY_HERE"
+# Pass the key as the first argument, or export GROQ_KEY beforehand:
+#   bash deploy-azure.sh gsk_yourkey
+# Taking it as an argument avoids editing this file, which previously broke
+# because sed also rewrote the guard below and made the check compare the key
+# against itself.
+GROQ_KEY="${1:-${GROQ_KEY:-}}"
 
 RG="bolopay-rg"
 LOC="southeastasia"          # closest region to Bangladesh; see fallback below
@@ -25,10 +30,18 @@ IMAGE="bolopay:v1"
 # Container registry names must be globally unique and alphanumeric only.
 ACR="bolopayacr$RANDOM$RANDOM"
 
-if [ "$GROQ_KEY" = "PASTE_YOUR_GROQ_KEY_HERE" ]; then
-  echo "ERROR: set GROQ_KEY at the top of this script first." >&2
-  exit 1
-fi
+case "$GROQ_KEY" in
+  gsk_*) ;;
+  "")
+    echo "ERROR: no Groq key supplied." >&2
+    echo "Usage: bash deploy-azure.sh gsk_yourkeyhere" >&2
+    exit 1
+    ;;
+  *)
+    echo "ERROR: that does not look like a Groq key (should start with gsk_)." >&2
+    exit 1
+    ;;
+esac
 
 echo "==> Registering resource providers (no-op if already registered)"
 az provider register --namespace Microsoft.App --wait
