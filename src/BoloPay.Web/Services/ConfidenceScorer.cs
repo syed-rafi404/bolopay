@@ -70,25 +70,39 @@ public sealed class ConfidenceScorer(IOptions<ConfidenceOptions> options)
         // calibration showed turbo mangled the number word on every clip
         // containing one, so the flag fired on clean speech too.)
         //
-        // A null on one side means that pass failed to extract a value, not
-        // that it extracted a conflicting one. Treating that as disagreement
-        // made the clean demo flag intermittently, since the extractor is not
-        // deterministic on a garbled token. Only flag when both passes are
-        // confident AND they differ.
+        // Nulls need care, and the distinction is the whole point:
+        //
+        //   both null      -> neither pass heard an amount. Nothing to confirm;
+        //                     the command fails elsewhere as unrecognised.
+        //   both non-null  -> flag only when they actually differ.
+        //   exactly one    -> one pass is confident enough to move money while
+        //                     the other could not hear a number at all. That is
+        //                     the most dangerous case, not the safest, and it
+        //                     must flag. Measured: on a noisy clip the greedy
+        //                     pass read পাঁচশো (500) while the sampled pass read
+        //                     পাপতো (no amount).
+        //
+        // An earlier revision treated any null as "no opinion" and skipped the
+        // flag. That fixed an intermittent false positive but silently opened
+        // this hole.
         if (crossCheck is not null)
         {
-            if (primary.AmountBdt is not null
-                && crossCheck.AmountBdt is not null
-                && primary.AmountBdt != crossCheck.AmountBdt)
+            if (primary.AmountBdt is not null || crossCheck.AmountBdt is not null)
             {
-                flags.Add(ConfidenceFlag.AmountDisagreement);
+                if (primary.AmountBdt != crossCheck.AmountBdt)
+                    flags.Add(ConfidenceFlag.AmountDisagreement);
             }
 
-            if (!string.IsNullOrWhiteSpace(primary.RecipientName)
-                && !string.IsNullOrWhiteSpace(crossCheck.RecipientName)
-                && !NamesAgree(primary.RecipientName, crossCheck.RecipientName))
+            var primaryHasName = !string.IsNullOrWhiteSpace(primary.RecipientName);
+            var crossHasName = !string.IsNullOrWhiteSpace(crossCheck.RecipientName);
+
+            if (primaryHasName || crossHasName)
             {
-                flags.Add(ConfidenceFlag.RecipientDisagreement);
+                if (primaryHasName != crossHasName
+                    || !NamesAgree(primary.RecipientName, crossCheck.RecipientName))
+                {
+                    flags.Add(ConfidenceFlag.RecipientDisagreement);
+                }
             }
         }
 

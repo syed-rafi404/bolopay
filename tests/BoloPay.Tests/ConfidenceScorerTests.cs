@@ -100,28 +100,66 @@ public class ConfidenceScorerTests
     }
 
     [Fact]
-    public void NullAmountInCrossPass_IsNotDisagreement()
+    public void OnlyPrimaryHeardAnAmount_IsDisagreement()
     {
-        // A null from the cross pass means that pass had no opinion, not that
-        // it read a conflicting value. Treating it as disagreement made the
-        // clean demo flag roughly one run in three, because the extractor is
-        // not deterministic on a garbled token: the same audio yielded 500
-        // twice and null once. Only a confident-vs-confident mismatch counts.
+        // The most dangerous case, and the one this signal exists for: one pass
+        // is confident enough to move money while the other could not hear a
+        // number at all. Measured on a noisy clip — the greedy pass read পাঁচশো
+        // (500) while the sampled pass read পাপতো and extracted nothing.
         var result = Scorer.Score(
             [Segment()],
             Send(amount: 500m),
             Send(amount: null));
 
-        Assert.DoesNotContain(ConfidenceFlag.AmountDisagreement, result.Flags);
-        Assert.False(result.NeedsConfirmation);
+        Assert.Contains(ConfidenceFlag.AmountDisagreement, result.Flags);
+        Assert.True(result.NeedsConfirmation);
+        Assert.True(result.AmountUncertain);
     }
 
     [Fact]
-    public void NullRecipientInCrossPass_IsNotDisagreement()
+    public void OnlyCrossPassHeardAnAmount_IsDisagreement()
+    {
+        // Symmetric case: the sampled pass found an amount the greedy pass did
+        // not. Equally untrustworthy, so it must flag too.
+        var result = Scorer.Score(
+            [Segment()],
+            Send(amount: null),
+            Send(amount: 500m));
+
+        Assert.Contains(ConfidenceFlag.AmountDisagreement, result.Flags);
+    }
+
+    [Fact]
+    public void NeitherPassHeardAnAmount_IsNotDisagreement()
+    {
+        // Both silent means there is nothing to confirm. The command fails
+        // elsewhere as unrecognised; flagging here would put a warning on a
+        // screen that has no amount to warn about.
+        var result = Scorer.Score(
+            [Segment()],
+            Send(amount: null),
+            Send(amount: null));
+
+        Assert.DoesNotContain(ConfidenceFlag.AmountDisagreement, result.Flags);
+    }
+
+    [Fact]
+    public void OnlyOnePassHeardARecipient_IsDisagreement()
     {
         var result = Scorer.Score(
             [Segment()],
             Send(recipient: "আদিবা"),
+            Send(recipient: null));
+
+        Assert.Contains(ConfidenceFlag.RecipientDisagreement, result.Flags);
+    }
+
+    [Fact]
+    public void NeitherPassHeardARecipient_IsNotDisagreement()
+    {
+        var result = Scorer.Score(
+            [Segment()],
+            Send(recipient: null),
             Send(recipient: null));
 
         Assert.DoesNotContain(ConfidenceFlag.RecipientDisagreement, result.Flags);
