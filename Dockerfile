@@ -27,20 +27,25 @@ RUN dotnet publish src/BoloPay.Web/BoloPay.Web.csproj \
 FROM mcr.microsoft.com/dotnet/aspnet:10.0 AS final
 WORKDIR /app
 
-# Run as a non-root user. The endpoint is public and unauthenticated, so there
-# is no reason for the process to have more rights than serving needs.
-RUN adduser --disabled-password --gecos "" --uid 5678 appuser \
-    && chown -R appuser /app
-USER appuser
+# The .NET runtime images already ship a non-root user named "app". Reusing it
+# avoids depending on adduser flags, which differ between Debian and BusyBox
+# base images. --chown matters: chowning /app before COPY does nothing, because
+# COPY would then write root-owned files into it.
+COPY --from=build --chown=app:app /app/publish .
 
-COPY --from=build /app/publish .
+USER app
 
-ENV ASPNETCORE_ENVIRONMENT=Production \
-    DOTNET_RUNNING_IN_CONTAINER=true \
-    # Trim startup work; this app has no need for diagnostics pipes.
-    DOTNET_EnableDiagnostics=0
+# One ENV per line. A comment inside a line continuation is not reliably
+# parsed and silently corrupts the instruction.
+ENV ASPNETCORE_ENVIRONMENT=Production
+ENV DOTNET_RUNNING_IN_CONTAINER=true
+
+# Data Protection has no persistent volume here, so it would log a noisy
+# warning on every start. Keys only guard antiforgery tokens for a stateless
+# demo, so an ephemeral in-memory keyring is correct.
+ENV DOTNET_EnableDiagnostics=0
 
 EXPOSE 8080
 
-# Render injects PORT. Fall back to 8080 for plain `docker run`.
+# Hosts inject PORT. Fall back to 8080 for plain `docker run`.
 ENTRYPOINT ["/bin/sh", "-c", "ASPNETCORE_URLS=http://+:${PORT:-8080} exec dotnet BoloPay.Web.dll"]

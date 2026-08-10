@@ -132,7 +132,15 @@ if (!app.Environment.IsDevelopment())
     app.UseHsts();
 }
 
-app.UseHttpsRedirection();
+// HTTPS redirection is deliberately Development-only. In a container the host's
+// proxy terminates TLS and forwards plain HTTP on a single port, so there is no
+// HTTPS port for the middleware to redirect to — it would log a warning on every
+// request and, combined with the forwarded proto header, risk a redirect loop.
+// UseHsts above already tells browsers to use HTTPS.
+if (app.Environment.IsDevelopment())
+{
+    app.UseHttpsRedirection();
+}
 app.UseStaticFiles();
 app.UseRouting();
 app.UseRateLimiter();
