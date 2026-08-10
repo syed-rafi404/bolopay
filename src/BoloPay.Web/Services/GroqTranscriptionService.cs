@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Http.Headers;
 using System.Text.Json;
 using BoloPay.Web.Models;
@@ -22,6 +23,7 @@ public sealed class GroqTranscriptionService(
         string fileName,
         string contentType,
         string model,
+        float temperature = 0f,
         CancellationToken cancellationToken = default)
     {
         // Buffer into a byte array rather than wrapping the caller's stream in
@@ -42,7 +44,11 @@ public sealed class GroqTranscriptionService(
         form.Add(new StringContent(_options.Language), "language");
         form.Add(new StringContent("verbose_json"), "response_format");
         form.Add(new StringContent("segment"), "timestamp_granularities[]");
-        form.Add(new StringContent("0"), "temperature");
+        // InvariantCulture matters: on a machine with a comma decimal separator
+        // this would otherwise send "0,4" and the API would reject it.
+        form.Add(
+            new StringContent(temperature.ToString(CultureInfo.InvariantCulture)),
+            "temperature");
 
         // Whisper's prompt parameter (max 224 tokens) steers vocabulary and
         // spelling. Seeding it with the contact names and money phrasing this
@@ -67,8 +73,8 @@ public sealed class GroqTranscriptionService(
                      ?? throw new GroqException("Transcription returned an unreadable response.");
 
         logger.LogInformation(
-            "ASR pass [{Model}] -> {SegmentCount} segment(s): {Text}",
-            model, parsed.Segments.Count, parsed.Text);
+            "ASR pass [{Model} @ t={Temperature}] -> {SegmentCount} segment(s): {Text}",
+            model, temperature, parsed.Segments.Count, parsed.Text);
 
         foreach (var s in parsed.Segments)
         {
@@ -98,10 +104,16 @@ public sealed class GroqTranscriptionService(
 
     private static string BuildPrompt()
     {
+        // Whisper's prompt (max 224 tokens) biases vocabulary and spelling.
+        // The larger amounts are listed explicitly because calibration showed
+        // "পঞ্চাশ হাজার" being heard as "পন্ছশে", which dropped the amount
+        // entirely and sent a valid command to the unrecognized branch.
         var names = string.Join(", ", MockData.Contacts.Select(c => $"{c.BanglaName} ({c.Name})"));
         return $"বিকাশ/মোবাইল ব্যাংকিং কমান্ড। পরিচিত নাম: {names}. "
-             + "টাকার পরিমাণ: একশো, দুইশো, তিনশো, পাঁচশো, নয়শো, এক হাজার, দুই হাজার। "
-             + "উদাহরণ: আদিবার নাম্বারে পাঁচশো টাকা পাঠাও। আমার ব্যালেন্স কত?";
+             + "টাকার পরিমাণ: একশো, দুইশো, তিনশো, চারশো, পাঁচশো, ছয়শো, সাতশো, আটশো, নয়শো, "
+             + "এক হাজার, দুই হাজার, পাঁচ হাজার, দশ হাজার, বিশ হাজার, পঞ্চাশ হাজার। "
+             + "উদাহরণ: আদিবার নাম্বারে পাঁচশো টাকা পাঠাও। "
+             + "আম্মাকে পঞ্চাশ হাজার টাকা পাঠাও। আমার ব্যালেন্স কত?";
     }
 }
 

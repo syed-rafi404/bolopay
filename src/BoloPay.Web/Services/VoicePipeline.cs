@@ -31,7 +31,8 @@ public sealed class VoicePipeline(
         await audio.CopyToAsync(buffer, cancellationToken);
 
         var primaryPass = await TranscribeAsync(
-            buffer, fileName, contentType, _groq.TranscriptionModel, cancellationToken);
+            buffer, fileName, contentType,
+            _groq.TranscriptionModel, _groq.PrimaryTemperature, cancellationToken);
 
         if (string.IsNullOrWhiteSpace(primaryPass.Text))
         {
@@ -39,16 +40,22 @@ public sealed class VoicePipeline(
             return new ProcessResult { Status = ResultStatus.NoSpeech };
         }
 
-        // Second pass through a different model. Costs one extra ASR call and
-        // buys a signal that segment-level metrics cannot provide: whether two
-        // independent transcriptions agree on the amount and the recipient.
+        // Second pass: same model, sampled instead of greedy. Where the audio is
+        // unambiguous both passes land on the same tokens; where it is not, they
+        // diverge. That divergence is the signal.
+        //
+        // This deliberately does NOT use a second model. Calibration against real
+        // Bangla showed whisper-large-v3-turbo mangling the number word in every
+        // clip containing one, including clean recordings, so cross-model
+        // disagreement measured model capability rather than audio clarity.
         TranscriptionPass? crossPass = null;
         if (_groq.EnableCrossCheck)
         {
             try
             {
                 crossPass = await TranscribeAsync(
-                    buffer, fileName, contentType, _groq.CrossCheckModel, cancellationToken);
+                    buffer, fileName, contentType,
+                    _groq.CrossCheckModel, _groq.CrossCheckTemperature, cancellationToken);
             }
             catch (Exception ex)
             {
@@ -95,11 +102,12 @@ public sealed class VoicePipeline(
         string fileName,
         string contentType,
         string model,
+        float temperature,
         CancellationToken cancellationToken)
     {
         buffer.Position = 0;
         return await transcription.TranscribeAsync(
-            buffer, fileName, contentType, model, cancellationToken);
+            buffer, fileName, contentType, model, temperature, cancellationToken);
     }
 
     private ProcessResult Build(

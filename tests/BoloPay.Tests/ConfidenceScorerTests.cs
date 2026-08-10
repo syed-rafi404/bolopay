@@ -100,14 +100,31 @@ public class ConfidenceScorerTests
     }
 
     [Fact]
-    public void NullAmountInCrossPass_StillCountsAsDisagreement()
+    public void NullAmountInCrossPass_IsNotDisagreement()
     {
+        // A null from the cross pass means that pass had no opinion, not that
+        // it read a conflicting value. Treating it as disagreement made the
+        // clean demo flag roughly one run in three, because the extractor is
+        // not deterministic on a garbled token: the same audio yielded 500
+        // twice and null once. Only a confident-vs-confident mismatch counts.
         var result = Scorer.Score(
             [Segment()],
             Send(amount: 500m),
             Send(amount: null));
 
-        Assert.Contains(ConfidenceFlag.AmountDisagreement, result.Flags);
+        Assert.DoesNotContain(ConfidenceFlag.AmountDisagreement, result.Flags);
+        Assert.False(result.NeedsConfirmation);
+    }
+
+    [Fact]
+    public void NullRecipientInCrossPass_IsNotDisagreement()
+    {
+        var result = Scorer.Score(
+            [Segment()],
+            Send(recipient: "আদিবা"),
+            Send(recipient: null));
+
+        Assert.DoesNotContain(ConfidenceFlag.RecipientDisagreement, result.Flags);
     }
 
     [Fact]

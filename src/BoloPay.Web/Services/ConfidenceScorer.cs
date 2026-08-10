@@ -63,13 +63,33 @@ public sealed class ConfidenceScorer(IOptions<ConfidenceOptions> options)
         }
 
         // --- Signal 2: cross-pass agreement --------------------------------
+        //
+        // Both passes use the same model at different temperatures, so a
+        // difference here reflects ambiguous audio rather than one model being
+        // weaker at Bangla. (The original design compared two different models;
+        // calibration showed turbo mangled the number word on every clip
+        // containing one, so the flag fired on clean speech too.)
+        //
+        // A null on one side means that pass failed to extract a value, not
+        // that it extracted a conflicting one. Treating that as disagreement
+        // made the clean demo flag intermittently, since the extractor is not
+        // deterministic on a garbled token. Only flag when both passes are
+        // confident AND they differ.
         if (crossCheck is not null)
         {
-            if (primary.AmountBdt != crossCheck.AmountBdt)
+            if (primary.AmountBdt is not null
+                && crossCheck.AmountBdt is not null
+                && primary.AmountBdt != crossCheck.AmountBdt)
+            {
                 flags.Add(ConfidenceFlag.AmountDisagreement);
+            }
 
-            if (!NamesAgree(primary.RecipientName, crossCheck.RecipientName))
+            if (!string.IsNullOrWhiteSpace(primary.RecipientName)
+                && !string.IsNullOrWhiteSpace(crossCheck.RecipientName)
+                && !NamesAgree(primary.RecipientName, crossCheck.RecipientName))
+            {
                 flags.Add(ConfidenceFlag.RecipientDisagreement);
+            }
         }
 
         // --- Signal 3: how convincing the contact match actually was ---------

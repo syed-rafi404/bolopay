@@ -21,11 +21,35 @@ public sealed class GroqOptions
     public string TranscriptionModel { get; set; } = "whisper-large-v3";
 
     /// <summary>
-    /// Second ASR pass used for cross-pass agreement. A different model is
-    /// deliberate: two independent errors are less likely to coincide than
-    /// the same model erring twice.
+    /// Model for the second (cross-check) pass. Defaults to the SAME model as
+    /// the primary pass, deliberately.
+    ///
+    /// The original design used whisper-large-v3-turbo here. Calibration against
+    /// real Bangla recordings showed that turbo mangled the number word in every
+    /// clip that contained one — including both clean recordings — so
+    /// "disagreement" measured turbo's weaker Bangla rather than whether the
+    /// audio was ambiguous. A signal that fires on every input discriminates
+    /// nothing.
+    ///
+    /// Sampling one model twice removes that confound: the only variable left
+    /// is the acoustics.
     /// </summary>
-    public string CrossCheckModel { get; set; } = "whisper-large-v3-turbo";
+    public string CrossCheckModel { get; set; } = "whisper-large-v3";
+
+    /// <summary>
+    /// Temperature for the primary pass. Zero is greedy decoding, so this pass
+    /// is reproducible — the value the user is shown never changes between runs.
+    /// </summary>
+    public float PrimaryTemperature { get; set; } = 0f;
+
+    /// <summary>
+    /// Temperature for the cross-check pass. Non-zero makes Whisper sample
+    /// rather than take the argmax at each step. Where the audio is
+    /// unambiguous, sampling lands on the same tokens and the two passes agree.
+    /// Where it is ambiguous, the passes diverge — which is exactly the
+    /// condition worth flagging on a payment screen.
+    /// </summary>
+    public float CrossCheckTemperature { get; set; } = 0.4f;
 
     /// <summary>Only gpt-oss-20b and gpt-oss-120b support strict structured output on Groq.</summary>
     public string ExtractionModel { get; set; } = "openai/gpt-oss-120b";
@@ -42,22 +66,37 @@ public sealed class GroqOptions
 }
 
 /// <summary>
-/// Section 7 thresholds. These are starting points derived from Groq's own
-/// documented "healthy" example (avg_logprob ~= -0.10, no_speech_prob ~= 0.01,
-/// compression_ratio ~= 1.66) — NOT measurements. They live in configuration
-/// precisely so Phase 3 can move them without a rebuild.
+/// Section 7 thresholds.
+///
+/// AvgLogprobFloor, NoSpeechProbCeiling and the compression band were seeded
+/// from Groq's documented "healthy" example. They have since been measured
+/// against ten real Bangla recordings — see recordings/calibration-results.csv
+/// and the README. The headline result: avg_logprob does NOT separate clear
+/// speech from mumbled speech in Bangla. Every clip scored between -0.012 and
+/// -0.126, and the most heavily mumbled clip scored *better* than both clean
+/// ones. The floor is kept as a guard against catastrophic input, not as a
+/// working discriminator.
 /// </summary>
 public sealed class ConfidenceOptions
 {
     public const string SectionName = "Confidence";
 
+    /// <summary>
+    /// Measured range on real recordings was -0.012 to -0.126, so this never
+    /// fires in practice. Retained as a floor for genuinely broken audio.
+    /// </summary>
     public double AvgLogprobFloor { get; set; } = -0.5;
 
     public double NoSpeechProbCeiling { get; set; } = 0.4;
 
     public double CompressionRatioMax { get; set; } = 2.2;
 
-    public double CompressionRatioMin { get; set; } = 1.0;
+    /// <summary>
+    /// Lowered from 1.0 after calibration. Short Bangla utterances compress
+    /// poorly: "আমার ব্যালেন্স কত?" measured 0.9245 and tripped a spurious
+    /// UnusualPattern flag purely for being short.
+    /// </summary>
+    public double CompressionRatioMin { get; set; } = 0.85;
 
     /// <summary>
     /// Fuzzy-match score below which a spoken name is treated as not matching

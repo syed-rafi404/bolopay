@@ -52,20 +52,23 @@ public sealed class StubTranscriptionService(
         string fileName,
         string contentType,
         string model,
+        float temperature = 0f,
         CancellationToken cancellationToken = default)
     {
         var scenario = _resolved ??= Resolve(fileName);
 
-        var isCrossCheck = !string.Equals(
-            model, _options.TranscriptionModel, StringComparison.OrdinalIgnoreCase);
+        // Both passes now use the same model, so temperature is what separates
+        // them: the greedy pass (0) is the "real" reading, the sampled pass is
+        // where an alternative reading can appear.
+        var isCrossCheck = temperature > 0f;
 
         var text = isCrossCheck && scenario.CrossCheckText is not null
             ? scenario.CrossCheckText
             : scenario.Text;
 
         logger.LogInformation(
-            "Stub ASR [{Model}{Role}] -> {Text}",
-            model, isCrossCheck ? " / cross-check" : " / primary", text);
+            "Stub ASR [{Model} @ t={Temperature}{Role}] -> {Text}",
+            model, temperature, isCrossCheck ? " / cross-check" : " / primary", text);
 
         var segment = new WhisperSegment
         {

@@ -50,14 +50,31 @@ public sealed class ContactMatcher(IOptions<ConfidenceOptions> options)
     }
 
     /// <summary>
-    /// Strips the Bangla case suffixes that turn আদিবা into আদিবাকে or আদিবার,
-    /// which would otherwise drag down an exact match.
+    /// Normalises a spoken name for comparison.
+    ///
+    /// Two things happen here, both driven by what the ASR actually returned
+    /// during calibration:
+    ///
+    /// 1. Bangla case suffixes are stripped — আদিবা becomes আদিবাকে or আদিবার
+    ///    depending on grammatical role, while the contact list stores the stem.
+    ///
+    /// 2. Hasanta (U+09CD, the conjunct-forming virama) and nukta (U+09BC) are
+    ///    removed. Whisper returned "তান্ভির" for the contact "তানভির" — the same
+    ///    name, differing only by a hasanta joining ন and ভ. That single
+    ///    codepoint dropped the fuzzy score below the confidence threshold and
+    ///    raised a spurious WeakContactMatch on a cleanly spoken clip.
     /// </summary>
     private static string Normalise(string value)
     {
         var trimmed = value.Trim().ToLowerInvariant();
 
-        foreach (var suffix in (string[])["কে", "র", "য়ের", "এর", "়"])
+        // Drop conjunct and nukta marks first, so suffix matching below runs
+        // against a stable form.
+        trimmed = new string(trimmed.Where(c => c is not ('\u09CD' or '\u09BC')).ToArray());
+
+        // Longest first: "য়ের" must be tried before "র", otherwise the shorter
+        // suffix strips one character and leaves a broken stem.
+        foreach (var suffix in (string[])["য়ের", "এর", "কে", "র"])
         {
             if (trimmed.Length > suffix.Length + 1 && trimmed.EndsWith(suffix, StringComparison.Ordinal))
             {
