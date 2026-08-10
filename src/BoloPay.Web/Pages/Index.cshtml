@@ -18,9 +18,19 @@
             hint = s.Hint
         })
     };
+
+    // The JSON is placed in a single-quoted HTML attribute, so double quotes
+    // inside it are safe but single quotes (in a name, say) would terminate the
+    // attribute early. Encoding them as &#39; keeps the payload intact —
+    // the browser decodes the entity before Alpine parses the expression.
+    //
+    // Emitting this into a double-quoted attribute with Html.Raw is what broke
+    // the deployed page: the attribute ended at the first property name, so
+    // Alpine received invalid JS and every binding silently rendered empty.
+    var configJson = JsonSerializer.Serialize(config).Replace("'", "&#39;");
 }
 
-<div class="min-h-full" x-data="boloApp(@Html.Raw(JsonSerializer.Serialize(config)))" x-init="init()" x-cloak>
+<div class="min-h-full" x-data='boloApp(@Html.Raw(configJson))' x-init="init()" x-cloak>
     <div class="mx-auto flex min-h-full w-full max-w-md flex-col px-4 pb-10 pt-5 sm:max-w-lg">
 
         @* ---------------------------------------------------------------
