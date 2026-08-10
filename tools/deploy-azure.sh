@@ -48,11 +48,16 @@ az provider register --namespace Microsoft.App --wait
 az provider register --namespace Microsoft.OperationalInsights --wait
 az provider register --namespace Microsoft.ContainerRegistry --wait
 
-# The resource group itself is only metadata and is rarely policy-blocked, so
-# its location does not have to match where the resources land.
-echo "==> Ensuring resource group $RG"
-az group create -n "$RG" -l eastus -o none 2>/dev/null \
-  || az group create -n "$RG" -l centralindia -o none
+# A resource group's location is only metadata — the resources inside it may
+# live in any region — so an existing group from a previous run is reused as-is.
+# Trying to recreate it elsewhere fails with InvalidResourceGroupLocation.
+if az group show -n "$RG" -o none 2>/dev/null; then
+  echo "==> Reusing existing resource group $RG ($(az group show -n "$RG" --query location -o tsv))"
+else
+  echo "==> Creating resource group $RG"
+  az group create -n "$RG" -l eastus -o none 2>/dev/null \
+    || az group create -n "$RG" -l centralindia -o none
+fi
 
 # Reuse a registry from a previous partial run rather than orphaning one.
 ACR="$(az acr list -g "$RG" --query "[0].name" -o tsv 2>/dev/null || true)"
