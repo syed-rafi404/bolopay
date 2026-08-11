@@ -499,3 +499,8 @@ recordings/*.ogg
 # Calibration output
 recordings/calibration*.json
 recordings/calibration*.csv
+
+# Original build spec written as an agent prompt. Kept locally as a working
+# document; it describes a Next.js/Vercel design that was superseded by the
+# ASP.NET Core implementation actually shipped, so it would only mislead.
+demo.md

@@ -165,6 +165,11 @@ reduction or normalisation: those filters remove the signal being measured.
 
 ## Deployment
 
+**Live: https://bolopay.onrender.com**
+
+Check `/healthz` for `{"status":"ok","transcription":"groq"}` — a `"stub"` value
+means the Groq key did not reach the container.
+
 Containerised, so it runs anywhere that takes a Dockerfile. `render.yaml` targets
 Render's free tier: no credit card, Docker-native, TLS and a subdomain included.
 
@@ -172,6 +177,11 @@ Render's free tier: no credit card, Docker-native, TLS and a subdomain included.
 docker build -t bolopay .
 docker run -p 8080:8080 -e Groq__ApiKey=gsk_... bolopay
 ```
+
+`tools/deploy-azure.sh` runs the same image on Azure Container Apps. It is kept as a
+second target rather than the canonical link: `.github/workflows/build-image.yml`
+publishes to GHCR because ACR Tasks are not permitted on Student subscriptions and
+Cloud Shell has no Docker daemon.
 
 On Render: connect the repo, and the blueprint is picked up automatically. Set
 `Groq__ApiKey` in the dashboard — `render.yaml` marks it `sync: false` so it is never
@@ -208,7 +218,7 @@ demo broken for a real visitor.
 ## Testing
 
 ```bash
-dotnet test tests/BoloPay.Tests        # unit tests: 26 (confidence scoring, contact matching)
+dotnet test tests/BoloPay.Tests        # unit tests: 46 (confidence scoring, contact matching)
 powershell -File tools/scenario-test.ps1  # end-to-end: every pipeline branch, stub transcriber
 powershell -File tools/guard-test.ps1     # input guards: 400/413/415 status codes
 ```
