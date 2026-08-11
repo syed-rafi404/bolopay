@@ -232,7 +232,8 @@ behaviour end to end against the stub transcriber.
 
 - `MediaRecorder` output differs by browser: Chrome emits WebM/Opus, Safari MP4/AAC. The
   client reads the recorder's actual MIME type and carries it through rather than
-  hardcoding `.webm` — the usual cause of Safari uploads arriving mislabelled.
+  hardcoding `.webm` — the usual cause of Safari uploads arriving mislabelled. Verified
+  on a real iOS device, not just desktop Chrome.
 - Bangla webfont (Hind Siliguri) is loaded explicitly; Windows and older Android don't
   reliably ship a Bangla font.
 - No TTS readback: `speechSynthesis` support for `bn-BD` is inconsistent, and the input
