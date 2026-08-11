@@ -1,0 +1,57 @@
+name: Keep the demo warm
+
+# Render's free tier spins an instance down after 15 minutes idle, and a cold
+# start costs 30-60 seconds. A CV link is clicked at unpredictable times, so the
+# only workable fix is to never let the instance go cold.
+#
+# A 10-minute schedule keeps it inside the 15-minute idle window with margin for
+# GitHub's scheduler drift, which can run several minutes late under load.
+#
+# /healthz is exempt from rate limiting and makes no external calls, so this
+# consumes no Groq quota.
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch:
+
+# Overlapping runs would be pointless and could pile up if a ping is slow.
+concurrency:
+  group: keep-warm
+  cancel-in-progress: true
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Ping health endpoint
+        run: |
+          URL="https://bolopay.onrender.com/healthz"
+
+          # --max-time 90 because a cold start can legitimately take ~60s; a
+          # shorter timeout would report failure exactly when the ping is doing
+          # its most useful work.
+          BODY=$(curl -fsS --max-time 90 --retry 2 --retry-delay 15 "$URL") || {
+            echo "Ping failed. The service may be down or still starting."
+            exit 1
+          }
+
+          echo "$BODY"
+
+          # A running container that lost its API key still answers 200, so
+          # assert on the payload rather than the status code.
+          case "$BODY" in
+            *'"transcription":"groq"'*)
+              echo "Warm, Groq key present."
+              ;;
+            *'"transcription":"stub"'*)
+              echo "Reachable but running in stub mode: Groq__ApiKey is missing."
+              exit 1
+              ;;
+            *)
+              echo "Unexpected health payload."
+              exit 1
+              ;;
+          esac
